@@ -1,0 +1,42 @@
+# Node dependencies
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Environment files
+.env
+.env.*.local
+
+# Logs
+logs
+*.log
+logs/*
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build and cache
+dist/
+build/
+.cache/
+.next/
+out/
+coverage/
+.nyc_output/
+
+# Editor & system files
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Optional
+*.tgz
