@@ -141,11 +141,6 @@ async function deleteAnswer(id) {
   return r.changes > 0;
 }
 
-
-
-
-
-
 // SSE endpoint
 app.get("/events", (req, res) => {
   // Set necessary headers for SSE
