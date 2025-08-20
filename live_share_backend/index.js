@@ -6,6 +6,8 @@ const PORT = 3000;
 
 // Enable CORS for all origins, or specify your client's origin
 app.use(cors());
+app.use(express.json());
+
 const db = new sqlite3.Database('app.db');
 
 db.serialize(() => {
@@ -59,6 +61,11 @@ async function createQuestion({ question }) {
   return get(`SELECT * FROM questions WHERE id = ?`, [r.lastID]);
 }
 
+app.post('/questions', async (req, res) => {
+  await createQuestion(req.body);
+  res.status(201).json({success: true});
+});
+
 function getQuestion(id) {
   return get(`SELECT * FROM questions WHERE id = ?`, [id]);
 }
@@ -71,6 +78,10 @@ function listQuestions({ search, limit=50, offset=0 } = {}) {
     params
   );
 }
+app.get('/questions', (req, res) => {
+  const questions = listQuestions();
+  res.json(questions);
+});
 
 async function updateQuestion(id, { question }) {
   await run(`UPDATE questions SET question = ? WHERE id = ?`, [question, id]);
@@ -82,6 +93,11 @@ async function deleteQuestion(id) {
   const r = await run(`DELETE FROM questions WHERE id = ?`, [id]);
   return r.changes > 0;
 }
+
+app.delete('/questions/:id', (req, res) => {
+  const question = deleteQuestion(req.params.id);
+  res.json(question);
+});
 
 async function likeQuestion(id, delta=1) {
   await run(`UPDATE questions SET likes = likes + ? WHERE id = ?`, [delta, id]);
@@ -124,6 +140,11 @@ async function deleteAnswer(id) {
   const r = await run(`DELETE FROM answers WHERE id = ?`, [id]);
   return r.changes > 0;
 }
+
+
+
+
+
 
 // SSE endpoint
 app.get("/events", (req, res) => {
