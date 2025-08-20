@@ -49,7 +49,81 @@ const all = (sql, params=[]) =>
     db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
   });
 
-db.close()
+
+  /* ========= QUESTIONS ========= */
+async function createQuestion({ question }) {
+  const r = await run(
+    `INSERT INTO questions (question) VALUES (?)`,
+    [question]
+  );
+  return get(`SELECT * FROM questions WHERE id = ?`, [r.lastID]);
+}
+
+function getQuestion(id) {
+  return get(`SELECT * FROM questions WHERE id = ?`, [id]);
+}
+
+function listQuestions({ search, limit=50, offset=0 } = {}) {
+  const where = search ? `WHERE question LIKE ?` : ``;
+  const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
+  return all(
+    `SELECT * FROM questions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    params
+  );
+}
+
+async function updateQuestion(id, { question }) {
+  await run(`UPDATE questions SET question = ? WHERE id = ?`, [question, id]);
+  return getQuestion(id);
+}
+
+async function deleteQuestion(id) {
+  // answers will auto-delete due to ON DELETE CASCADE
+  const r = await run(`DELETE FROM questions WHERE id = ?`, [id]);
+  return r.changes > 0;
+}
+
+async function likeQuestion(id, delta=1) {
+  await run(`UPDATE questions SET likes = likes + ? WHERE id = ?`, [delta, id]);
+  return getQuestion(id);
+}
+
+async function dislikeQuestion(id, delta=1) {
+  await run(`UPDATE questions SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
+  return getQuestion(id);
+}
+
+/* ========= ANSWERS ========= */
+async function createAnswer({ question_id, answer }) {
+  const exists = await get(`SELECT id FROM questions WHERE id = ?`, [question_id]);
+  if (!exists) throw new Error('question not found');
+  const r = await run(
+    `INSERT INTO answers (answer, question_id) VALUES (?, ?)`,
+    [answer, question_id]
+  );
+  return get(`SELECT * FROM answers WHERE id = ?`, [r.lastID]);
+}
+
+function getAnswer(id) {
+  return get(`SELECT * FROM answers WHERE id = ?`, [id]);
+}
+
+function listAnswersByQuestion(question_id) {
+  return all(
+    `SELECT * FROM answers WHERE question_id = ? ORDER BY created_at DESC`,
+    [question_id]
+  );
+}
+
+async function updateAnswer(id, { answer }) {
+  await run(`UPDATE answers SET answer = ? WHERE id = ?`, [answer, id]);
+  return getAnswer(id);
+}
+
+async function deleteAnswer(id) {
+  const r = await run(`DELETE FROM answers WHERE id = ?`, [id]);
+  return r.changes > 0;
+}
 
 // SSE endpoint
 app.get("/events", (req, res) => {
