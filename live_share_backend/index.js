@@ -25,8 +25,9 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       answer TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+      event_id INTEGER NOT NULL,
       likes INTEGER DEFAULT 0,
+      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
     )
   `);
 });
