@@ -62,8 +62,8 @@ async function createQuestion({ question }) {
 }
 
 app.post('/questions', async (req, res) => {
-  await createQuestion(req.body);
-  res.status(201).json({success: true});
+  const question = await createQuestion(req.body);
+  res.status(201).json({success: true, question});
 });
 
 function getQuestion(id) {
