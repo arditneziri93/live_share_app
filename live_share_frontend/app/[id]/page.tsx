@@ -4,7 +4,7 @@ import { QuestionCard } from "@/components/custom/QuestionCard";
 import Event from "@/types/Event";
 import Question from "@/types/Question";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const dummyEvent: Event = {
   id: 1,
@@ -38,28 +38,42 @@ const dummyEvent: Event = {
 
 export default function Home() {
   const [event, setEvent] = useState<Event | null>(dummyEvent);
+  const esRef = useRef<EventSource | null>(null);
 
-  const params = useParams<{ id?: string }>();
-  const id = params?.id;
-  let eventSource: EventSource;
+  const { id } = useParams();
+
   useEffect(() => {
-    eventSource = new EventSource(`http://localhost:3000/${id}`);
-    eventSource.addEventListener("message", function (event) {
-      setEvent(JSON.parse(event.data));
-      console.log(event.data);
+    if (!id) return; // no route param yet
+    if (typeof window === "undefined") return;
+    if (esRef.current) return; // guard against StrictMode double-mount
+
+    const url = `http://localhost:3004/events/${id}`;
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.addEventListener("open", () => console.log("SSE open", url));
+
+    es.addEventListener("message", (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as Event;
+        setEvent(payload);
+        console.log("SSE message", payload);
+      } catch (err) {
+        console.warn("Bad SSE payload", err);
+      }
     });
 
-    // Handle connection errors
-    eventSource.addEventListener("error", function (err) {
-      //console.error("EventSource failed:", err);
-      //eventSource.close(); // Attempt to close on error
+    es.addEventListener("error", (err) => {
+      // Let EventSource auto-retry; close only if you implement backoff yourself
+      console.error("SSE error", err);
     });
 
-    // Listen for connection open
-    eventSource.addEventListener("open", function () {
-      console.log("SSE connection opened.");
-    });
-  }, []);
+    return () => {
+      esRef.current?.close();
+      esRef.current = null;
+      console.log("SSE closed");
+    };
+  }, [id]);
 
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center  min-h-screen p-8 pb-20 gap-16 sm:p-20 max-w-[1024px] mx-auto">
