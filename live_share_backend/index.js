@@ -13,21 +13,21 @@ const db = new sqlite3.Database('app.db');
 db.serialize(() => {
   db.run('PRAGMA foreign_keys = ON');
   db.run(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.run(`
     CREATE TABLE IF NOT EXISTS questions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       question TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
+      event_id INTEGER NOT NULL,
       likes INTEGER DEFAULT 0,
-      dislikes INTEGER DEFAULT 0
-    )
-  `);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS answers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      answer TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      question_id INTEGER NOT NULL,
-      FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
     )
   `);
 });
@@ -53,83 +53,90 @@ const all = (sql, params=[]) =>
 
 
   /* ========= QUESTIONS ========= */
-async function createQuestion({ question }) {
+async function createEvent({ title, description }) {
   const r = await run(
-    `INSERT INTO questions (question) VALUES (?)`,
-    [question]
+    `INSERT INTO events (title, description) VALUES (?, ?)`,
+    [title, description]
   );
-  return get(`SELECT * FROM questions WHERE id = ?`, [r.lastID]);
+  return get(`SELECT * FROM events WHERE id = ?`, [r.lastID]);
 }
 
-app.post('/questions', async (req, res) => {
-  const question = await createQuestion(req.body);
-  res.status(201).json({success: true, question});
+app.post('/events', async (req, res) => {
+  const event = await createEvent(req.body);
+  res.status(201).json({success: true, event});
 });
 
-function getQuestion(id) {
-  return get(`SELECT * FROM questions WHERE id = ?`, [id]);
+function getEvent(id) {
+  return get(`SELECT * FROM events WHERE id = ?`, [id]);
 }
 
-function listQuestions({ search, limit=50, offset=0 } = {}) {
-  const where = search ? `WHERE question LIKE ?` : ``;
-  const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
-  return all(
-    `SELECT * FROM questions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    params
-  );
+function listEvents() {
+  return all(`SELECT * FROM events ORDER BY created_at DESC `);
 }
-app.get('/questions', (req, res) => {
-  const questions = listQuestions();
-  res.json(questions);
+app.get('/events', async (req, res) => {
+  const events = await listEvents();
+  res.json(events);
 });
 
-async function updateQuestion(id, { question }) {
-  await run(`UPDATE questions SET question = ? WHERE id = ?`, [question, id]);
-  return getQuestion(id);
+async function updateEvent(id, { title, description }) {
+  await run(`UPDATE events SET title = ?, description = ? WHERE id = ?`, [title, description, id]);
+  return getEvent(id);
 }
 
-async function deleteQuestion(id) {
+async function deleteEvent(id) {
   // answers will auto-delete due to ON DELETE CASCADE
-  const r = await run(`DELETE FROM questions WHERE id = ?`, [id]);
+  const r = await run(`DELETE FROM events WHERE id = ?`, [id]);
   return r.changes > 0;
 }
 
-app.delete('/questions/:id', (req, res) => {
-  const question = deleteQuestion(req.params.id);
-  res.json(question);
+app.delete('/events/:id', (req, res) => {
+  const event = deleteEvent(req.params.id);
+  res.json(event);
 });
 
-async function likeQuestion(id, delta=1) {
-  await run(`UPDATE questions SET likes = likes + ? WHERE id = ?`, [delta, id]);
-  return getQuestion(id);
+async function likeEvent(id, delta=1) {
+  await run(`UPDATE events SET likes = likes + ? WHERE id = ?`, [delta, id]);
+  return getEvent(id);
 }
 
-async function dislikeQuestion(id, delta=1) {
-  await run(`UPDATE questions SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
-  return getQuestion(id);
+async function dislikeEvent(id, delta=1) {
+  await run(`UPDATE events SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
+  return getEvent(id);
 }
 
-/* ========= ANSWERS ========= */
-async function createAnswer({ question_id, answer }) {
-  const exists = await get(`SELECT id FROM questions WHERE id = ?`, [question_id]);
-  if (!exists) throw new Error('question not found');
+/* ========= Questions ========= */
+async function createQuestion({ event_id, question }) {
+  const exists = await get(`SELECT id FROM events WHERE id = ?`, [event_id]);
+  if (!exists) throw new Error('event not found');
   const r = await run(
-    `INSERT INTO answers (answer, question_id) VALUES (?, ?)`,
-    [answer, question_id]
+    `INSERT INTO questions (question, event_id) VALUES (?, ?)`,
+    [question, event_id]
   );
   return get(`SELECT * FROM answers WHERE id = ?`, [r.lastID]);
 }
+
+app.post("/question", async (req, res) => {
+  const question = await createQuestion(req.body);
+  res.status(201).json({success: true, question});
+});
 
 function getAnswer(id) {
   return get(`SELECT * FROM answers WHERE id = ?`, [id]);
 }
 
-function listAnswersByQuestion(question_id) {
+function listQuestionsByEvent(event_id) {
   return all(
-    `SELECT * FROM answers WHERE question_id = ? ORDER BY created_at DESC`,
-    [question_id]
+    `SELECT * FROM questions WHERE event_id = ? ORDER BY created_at DESC`,
+    [event_id]
   );
 }
+
+app.get("/questionsByEventId", async  (req, res) => {
+  const id = req.query.eventId;
+  const questions = await listQuestionsByEvent(id);
+  res.json(questions);
+})
+
 
 async function updateAnswer(id, { answer }) {
   await run(`UPDATE answers SET answer = ? WHERE id = ?`, [answer, id]);
@@ -142,27 +149,32 @@ async function deleteAnswer(id) {
 }
 
 // SSE endpoint
-app.get("/events", (req, res) => {
+app.get("/stream", (req, res) => {
   // Set necessary headers for SSE
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Access-Control-Allow-Origin", "*"); // Allow cross-origin requests
 
-  let counter = 0;
+  const eventId = req.query.eventId;
+  console.log(`Event ID: ${eventId}`);
 
-  // Function to send events
-  const sendEvent = () => {
-    counter++;
-    const message = `Server sent message ${counter} at ${new Date().toLocaleTimeString()}`;
-
-    // SSE data format: data: [your_message]\n\n
-    res.write(`data: ${message}\n\n`);
-    console.log(`Sent: ${message}`);
-  };
+  const sendAnswers = async () => {
+    try {
+      const answers = await listQuestionsByEvent(eventId);
+      console.log(`Answers: ${answers}`);
+      const stringifiedAnswers = JSON.stringify(answers);
+      res.write(`data: ${stringifiedAnswers}\n\n`);
+    } catch (error) {
+      console.error(error);
+      res.write(`data: ${error}\n\n`);
+    }
+  }
 
   // Send an event every 3 seconds
-  const intervalId = setInterval(sendEvent, 3000);
+  const intervalId = setInterval(async() => {
+    await sendAnswers();
+  }, 3000);
 
   // Clean up when the client disconnects
   req.on("close", () => {
