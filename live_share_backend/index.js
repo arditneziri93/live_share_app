@@ -115,6 +115,11 @@ async function createQuestion({ event_id, question }) {
   return get(`SELECT * FROM answers WHERE id = ?`, [r.lastID]);
 }
 
+app.post("/question", async (req, res) => {
+  const question = await createQuestion(req.body);
+  res.status(201).json({success: true, question});
+});
+
 function getAnswer(id) {
   return get(`SELECT * FROM answers WHERE id = ?`, [id]);
 }
@@ -125,6 +130,13 @@ function listQuestionsByEvent(event_id) {
     [event_id]
   );
 }
+
+app.get("/questionsByEventId", async  (req, res) => {
+  const id = req.query.eventId;
+  const questions = await listQuestionsByEvent(id);
+  res.json(questions);
+})
+
 
 async function updateAnswer(id, { answer }) {
   await run(`UPDATE answers SET answer = ? WHERE id = ?`, [answer, id]);
@@ -137,7 +149,7 @@ async function deleteAnswer(id) {
 }
 
 // SSE endpoint
-app.get("/questions", (req, res) => {
+app.get("/stream", (req, res) => {
   // Set necessary headers for SSE
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -150,6 +162,7 @@ app.get("/questions", (req, res) => {
   const sendAnswers = async () => {
     try {
       const answers = await listQuestionsByEvent(eventId);
+      console.log(`Answers: ${answers}`);
       const stringifiedAnswers = JSON.stringify(answers);
       res.write(`data: ${stringifiedAnswers}\n\n`);
     } catch (error) {
@@ -159,7 +172,9 @@ app.get("/questions", (req, res) => {
   }
 
   // Send an event every 3 seconds
-  const intervalId = setInterval(sendAnswers, 3000);
+  const intervalId = setInterval(async() => {
+    await sendAnswers();
+  }, 3000);
 
   // Clean up when the client disconnects
   req.on("close", () => {
