@@ -82,6 +82,28 @@ app.get("/events", (req, res) => {
   });
 });
 
+process.on('SIGINT', () => {
+  db.close((err) => {
+    if (err) {
+      console.error('Error closing the database:', err.message);
+    } else {
+      console.log('Database connection closed.');
+    }
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  db.close((err) => {
+    if (err) {
+      console.error('Error closing the database:', err.message);
+    } else {
+      console.log('Database connection closed.');
+    }
+    process.exit(0);
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   console.log(
