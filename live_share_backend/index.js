@@ -1,5 +1,5 @@
-import * as express from "express";
-import * as cors from "cors"; // Required for cross-origin requests from client
+const express = require("express");
+const cors = require("cors"); // Required for cross-origin requests from client
 const app = express();
 const PORT = 3000;
 
