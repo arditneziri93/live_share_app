@@ -70,16 +70,11 @@ function getEvent(id) {
   return get(`SELECT * FROM events WHERE id = ?`, [id]);
 }
 
-function listEvents({ search, limit=50, offset=0 } = {}) {
-  const where = search ? `WHERE title LIKE ?` : ``;
-  const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
-  return all(
-    `SELECT * FROM events ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    params
-  );
+function listEvents() {
+  return all(`SELECT * FROM events ORDER BY created_at DESC `);
 }
-app.get('/events', (req, res) => {
-  const events = listEvents();
+app.get('/events', async (req, res) => {
+  const events = await listEvents();
   res.json(events);
 });
 
