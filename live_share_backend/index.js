@@ -1,17 +1,17 @@
 const express = require("express");
 const cors = require("cors"); // Required for cross-origin requests from client
-const sqlite3 = require('sqlite3').verbose()
+const sqlite3 = require("sqlite3").verbose();
 const app = express();
-const PORT = 3000;
+const PORT = 3004;
 
 // Enable CORS for all origins, or specify your client's origin
 app.use(cors());
 app.use(express.json());
 
-const db = new sqlite3.Database('app.db');
+const db = new sqlite3.Database("app.db");
 
 db.serialize(() => {
-  db.run('PRAGMA foreign_keys = ON');
+  db.run("PRAGMA foreign_keys = ON");
   db.run(`
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +33,7 @@ db.serialize(() => {
 });
 
 // tiny promisified helpers
-const run = (sql, params=[]) =>
+const run = (sql, params = []) =>
   new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) return reject(err);
@@ -41,29 +41,28 @@ const run = (sql, params=[]) =>
     });
   });
 
-const get = (sql, params=[]) =>
+const get = (sql, params = []) =>
   new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
   });
 
-const all = (sql, params=[]) =>
+const all = (sql, params = []) =>
   new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
   });
 
-
-  /* ========= QUESTIONS ========= */
+/* ========= QUESTIONS ========= */
 async function createEvent({ title, description }) {
-  const r = await run(
-    `INSERT INTO events (title, description) VALUES (?, ?)`,
-    [title, description]
-  );
+  const r = await run(`INSERT INTO events (title, description) VALUES (?, ?)`, [
+    title,
+    description,
+  ]);
   return get(`SELECT * FROM events WHERE id = ?`, [r.lastID]);
 }
 
-app.post('/events', async (req, res) => {
+app.post("/events", async (req, res) => {
   const event = await createEvent(req.body);
-  res.status(201).json({success: true, event});
+  res.status(201).json({ success: true, event });
 });
 
 function getEvent(id) {
@@ -73,13 +72,17 @@ function getEvent(id) {
 function listEvents() {
   return all(`SELECT * FROM events ORDER BY created_at DESC `);
 }
-app.get('/events', async (req, res) => {
+app.get("/events", async (req, res) => {
   const events = await listEvents();
   res.json(events);
 });
 
 async function updateEvent(id, { title, description }) {
-  await run(`UPDATE events SET title = ?, description = ? WHERE id = ?`, [title, description, id]);
+  await run(`UPDATE events SET title = ?, description = ? WHERE id = ?`, [
+    title,
+    description,
+    id,
+  ]);
   return getEvent(id);
 }
 
@@ -89,25 +92,28 @@ async function deleteEvent(id) {
   return r.changes > 0;
 }
 
-app.delete('/events/:id', (req, res) => {
+app.delete("/events/:id", (req, res) => {
   const event = deleteEvent(req.params.id);
   res.json(event);
 });
 
-async function likeEvent(id, delta=1) {
+async function likeEvent(id, delta = 1) {
   await run(`UPDATE events SET likes = likes + ? WHERE id = ?`, [delta, id]);
   return getEvent(id);
 }
 
-async function dislikeEvent(id, delta=1) {
-  await run(`UPDATE events SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
+async function dislikeEvent(id, delta = 1) {
+  await run(`UPDATE events SET dislikes = dislikes + ? WHERE id = ?`, [
+    delta,
+    id,
+  ]);
   return getEvent(id);
 }
 
 /* ========= Questions ========= */
 async function createQuestion({ event_id, question }) {
   const exists = await get(`SELECT id FROM events WHERE id = ?`, [event_id]);
-  if (!exists) throw new Error('event not found');
+  if (!exists) throw new Error("event not found");
   const r = await run(
     `INSERT INTO questions (question, event_id) VALUES (?, ?)`,
     [question, event_id]
@@ -117,7 +123,7 @@ async function createQuestion({ event_id, question }) {
 
 app.post("/question", async (req, res) => {
   const question = await createQuestion(req.body);
-  res.status(201).json({success: true, question});
+  res.status(201).json({ success: true, question });
 });
 
 function getAnswer(id) {
@@ -131,12 +137,11 @@ function listQuestionsByEvent(event_id) {
   );
 }
 
-app.get("/questionsByEventId", async  (req, res) => {
+app.get("/questionsByEventId", async (req, res) => {
   const id = req.query.eventId;
   const questions = await listQuestionsByEvent(id);
   res.json(questions);
-})
-
+});
 
 async function updateAnswer(id, { answer }) {
   await run(`UPDATE answers SET answer = ? WHERE id = ?`, [answer, id]);
@@ -149,30 +154,29 @@ async function deleteAnswer(id) {
 }
 
 // SSE endpoint
-app.get("/stream", (req, res) => {
+app.get("/events/:eventId", (req, res) => {
   // Set necessary headers for SSE
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Access-Control-Allow-Origin", "*"); // Allow cross-origin requests
 
-  const eventId = req.query.eventId;
+  const { eventId } = req.params;
   console.log(`Event ID: ${eventId}`);
 
   const sendAnswers = async () => {
     try {
       const answers = await listQuestionsByEvent(eventId);
       console.log(`Answers: ${answers}`);
-      const stringifiedAnswers = JSON.stringify(answers);
-      res.write(`data: ${stringifiedAnswers}\n\n`);
+      res.write(JSON.stringify(answers));
     } catch (error) {
       console.error(error);
-      res.write(`data: ${error}\n\n`);
+      res.write(error);
     }
-  }
+  };
 
   // Send an event every 3 seconds
-  const intervalId = setInterval(async() => {
+  const intervalId = setInterval(async () => {
     await sendAnswers();
   }, 3000);
 
@@ -184,23 +188,23 @@ app.get("/stream", (req, res) => {
   });
 });
 
-process.on('SIGINT', () => {
+process.on("SIGINT", () => {
   db.close((err) => {
     if (err) {
-      console.error('Error closing the database:', err.message);
+      console.error("Error closing the database:", err.message);
     } else {
-      console.log('Database connection closed.');
+      console.log("Database connection closed.");
     }
     process.exit(0);
   });
 });
 
-process.on('SIGTERM', () => {
+process.on("SIGTERM", () => {
   db.close((err) => {
     if (err) {
-      console.error('Error closing the database:', err.message);
+      console.error("Error closing the database:", err.message);
     } else {
-      console.log('Database connection closed.');
+      console.log("Database connection closed.");
     }
     process.exit(0);
   });

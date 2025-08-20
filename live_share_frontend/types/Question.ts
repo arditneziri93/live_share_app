@@ -1,10 +1,7 @@
-import Answer from "./Answer";
-
 export default interface Question {
   id: number;
-  value: string;
-  createdAt: Date;
+  event_id: number;
+  text: string;
   likes: number;
-  dislikes: number;
-  answers: Answer[];
+  createdAt: Date;
 }
