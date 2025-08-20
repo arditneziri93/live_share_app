@@ -21,9 +21,9 @@ db.serialize(() => {
     )
   `);
   db.run(`
-    CREATE TABLE IF NOT EXISTS answers (
+    CREATE TABLE IF NOT EXISTS questions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      answer TEXT NOT NULL,
+      question TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
       event_id INTEGER NOT NULL,
       likes INTEGER DEFAULT 0,
@@ -104,13 +104,13 @@ async function dislikeEvent(id, delta=1) {
   return getEvent(id);
 }
 
-/* ========= ANSWERS ========= */
-async function createAnswer({ question_id, answer }) {
-  const exists = await get(`SELECT id FROM questions WHERE id = ?`, [question_id]);
-  if (!exists) throw new Error('question not found');
+/* ========= Questions ========= */
+async function createQuestion({ event_id, question }) {
+  const exists = await get(`SELECT id FROM events WHERE id = ?`, [event_id]);
+  if (!exists) throw new Error('event not found');
   const r = await run(
-    `INSERT INTO answers (answer, question_id) VALUES (?, ?)`,
-    [answer, question_id]
+    `INSERT INTO questions (question, event_id) VALUES (?, ?)`,
+    [question, event_id]
   );
   return get(`SELECT * FROM answers WHERE id = ?`, [r.lastID]);
 }
@@ -119,10 +119,10 @@ function getAnswer(id) {
   return get(`SELECT * FROM answers WHERE id = ?`, [id]);
 }
 
-function listAnswersByQuestion(question_id) {
+function listQuestionsByEvent(event_id) {
   return all(
-    `SELECT * FROM answers WHERE question_id = ? ORDER BY created_at DESC`,
-    [question_id]
+    `SELECT * FROM questions WHERE event_id = ? ORDER BY created_at DESC`,
+    [event_id]
   );
 }
 
@@ -137,27 +137,29 @@ async function deleteAnswer(id) {
 }
 
 // SSE endpoint
-app.get("/events", (req, res) => {
+app.get("/questions", (req, res) => {
   // Set necessary headers for SSE
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Access-Control-Allow-Origin", "*"); // Allow cross-origin requests
 
-  let counter = 0;
+  const eventId = req.query.eventId;
+  console.log(`Event ID: ${eventId}`);
 
-  // Function to send events
-  const sendEvent = () => {
-    counter++;
-    const message = `Server sent message ${counter} at ${new Date().toLocaleTimeString()}`;
-
-    // SSE data format: data: [your_message]\n\n
-    res.write(`data: ${message}\n\n`);
-    console.log(`Sent: ${message}`);
-  };
+  const sendAnswers = async () => {
+    try {
+      const answers = await listQuestionsByEvent(eventId);
+      const stringifiedAnswers = JSON.stringify(answers);
+      res.write(`data: ${stringifiedAnswers}\n\n`);
+    } catch (error) {
+      console.error(error);
+      res.write(`data: ${error}\n\n`);
+    }
+  }
 
   // Send an event every 3 seconds
-  const intervalId = setInterval(sendEvent, 3000);
+  const intervalId = setInterval(sendAnswers, 3000);
 
   // Clean up when the client disconnects
   req.on("close", () => {
