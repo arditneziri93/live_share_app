@@ -13,12 +13,11 @@ const db = new sqlite3.Database('app.db');
 db.serialize(() => {
   db.run('PRAGMA foreign_keys = ON');
   db.run(`
-    CREATE TABLE IF NOT EXISTS questions (
+    CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      question TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      likes INTEGER DEFAULT 0,
-      dislikes INTEGER DEFAULT 0
+      title TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
   db.run(`
@@ -26,8 +25,8 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       answer TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
-      question_id INTEGER NOT NULL,
-      FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+      likes INTEGER DEFAULT 0,
     )
   `);
 });
@@ -53,60 +52,60 @@ const all = (sql, params=[]) =>
 
 
   /* ========= QUESTIONS ========= */
-async function createQuestion({ question }) {
+async function createEvent({ title, description }) {
   const r = await run(
-    `INSERT INTO questions (question) VALUES (?)`,
-    [question]
+    `INSERT INTO events (title, description) VALUES (?, ?)`,
+    [title, description]
   );
-  return get(`SELECT * FROM questions WHERE id = ?`, [r.lastID]);
+  return get(`SELECT * FROM events WHERE id = ?`, [r.lastID]);
 }
 
-app.post('/questions', async (req, res) => {
-  const question = await createQuestion(req.body);
-  res.status(201).json({success: true, question});
+app.post('/events', async (req, res) => {
+  const event = await createEvent(req.body);
+  res.status(201).json({success: true, event});
 });
 
-function getQuestion(id) {
-  return get(`SELECT * FROM questions WHERE id = ?`, [id]);
+function getEvent(id) {
+  return get(`SELECT * FROM events WHERE id = ?`, [id]);
 }
 
-function listQuestions({ search, limit=50, offset=0 } = {}) {
-  const where = search ? `WHERE question LIKE ?` : ``;
+function listEvents({ search, limit=50, offset=0 } = {}) {
+  const where = search ? `WHERE title LIKE ?` : ``;
   const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
   return all(
-    `SELECT * FROM questions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT * FROM events ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     params
   );
 }
-app.get('/questions', (req, res) => {
-  const questions = listQuestions();
-  res.json(questions);
+app.get('/events', (req, res) => {
+  const events = listEvents();
+  res.json(events);
 });
 
-async function updateQuestion(id, { question }) {
-  await run(`UPDATE questions SET question = ? WHERE id = ?`, [question, id]);
-  return getQuestion(id);
+async function updateEvent(id, { title, description }) {
+  await run(`UPDATE events SET title = ?, description = ? WHERE id = ?`, [title, description, id]);
+  return getEvent(id);
 }
 
-async function deleteQuestion(id) {
+async function deleteEvent(id) {
   // answers will auto-delete due to ON DELETE CASCADE
-  const r = await run(`DELETE FROM questions WHERE id = ?`, [id]);
+  const r = await run(`DELETE FROM events WHERE id = ?`, [id]);
   return r.changes > 0;
 }
 
-app.delete('/questions/:id', (req, res) => {
-  const question = deleteQuestion(req.params.id);
-  res.json(question);
+app.delete('/events/:id', (req, res) => {
+  const event = deleteEvent(req.params.id);
+  res.json(event);
 });
 
-async function likeQuestion(id, delta=1) {
-  await run(`UPDATE questions SET likes = likes + ? WHERE id = ?`, [delta, id]);
-  return getQuestion(id);
+async function likeEvent(id, delta=1) {
+  await run(`UPDATE events SET likes = likes + ? WHERE id = ?`, [delta, id]);
+  return getEvent(id);
 }
 
-async function dislikeQuestion(id, delta=1) {
-  await run(`UPDATE questions SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
-  return getQuestion(id);
+async function dislikeEvent(id, delta=1) {
+  await run(`UPDATE events SET dislikes = dislikes + ? WHERE id = ?`, [delta, id]);
+  return getEvent(id);
 }
 
 /* ========= ANSWERS ========= */
