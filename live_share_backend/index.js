@@ -1,10 +1,55 @@
 const express = require("express");
 const cors = require("cors"); // Required for cross-origin requests from client
+const sqlite3 = require('sqlite3').verbose()
 const app = express();
 const PORT = 3000;
 
 // Enable CORS for all origins, or specify your client's origin
 app.use(cors());
+const db = new sqlite3.Database('app.db');
+
+db.serialize(() => {
+  db.run('PRAGMA foreign_keys = ON');
+  db.run(`
+    CREATE TABLE IF NOT EXISTS questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      likes INTEGER DEFAULT 0,
+      dislikes INTEGER DEFAULT 0
+    )
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS answers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      answer TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      question_id INTEGER NOT NULL,
+      FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )
+  `);
+});
+
+// tiny promisified helpers
+const run = (sql, params=[]) =>
+  new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve({ changes: this.changes, lastID: this.lastID });
+    });
+  });
+
+const get = (sql, params=[]) =>
+  new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+  });
+
+const all = (sql, params=[]) =>
+  new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+  });
+
+db.close()
 
 // SSE endpoint
 app.get("/events", (req, res) => {
