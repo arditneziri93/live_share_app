@@ -1,10 +1,31 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card } from "../ui/card";
-import { Button } from "../ui/button";
-import { ChevronRightIcon, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
+import { FeedbackButton } from "./FeedbackButton";
+import { set } from "zod/v4";
 
 export const QuestionCard = (props: any) => {
+  const [isLiked, setIsLiked] = useState(false);
+  const [isDisliked, setIsDisliked] = useState(false);
+
+  function toggleLike() {
+    if (isLiked) {
+      setIsLiked(false);
+    } else {
+      setIsLiked(true);
+      setIsDisliked(false);
+    }
+  }
+
+  function toggleDislike() {
+    if (isDisliked) {
+      setIsDisliked(false);
+    } else {
+      setIsDisliked(true);
+      setIsLiked(false);
+    }
+  }
+
   return (
     <Card className="flex flex-row w-full justify-between p-4">
       <div>
@@ -16,14 +37,19 @@ export const QuestionCard = (props: any) => {
         </p>
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant={"ghost"} onClick={props.onLike}>
-          <ThumbsUp className="h-4 w-4" fill="grey" />
-          <span className="text-sm">{props.likes}</span>
-        </Button>
-        <Button variant={"ghost"} onClick={props.onDislike}>
-          <ThumbsDown className="h-4 w-4" />
-          <span className="text-sm">{props.likes}</span>
-        </Button>
+        <FeedbackButton
+          counterValue={props.likes}
+          isPositive={true}
+          isActive={isLiked}
+          onClick={toggleLike}
+        />
+
+        <FeedbackButton
+          counterValue={props.dislikes}
+          isPositive={false}
+          isActive={isDisliked}
+          onClick={toggleDislike}
+        />
       </div>
     </Card>
   );
