@@ -118,7 +118,7 @@ async function createQuestion({ event_id, question }) {
     `INSERT INTO questions (question, event_id) VALUES (?, ?)`,
     [question, event_id]
   );
-  return get(`SELECT * FROM answers WHERE id = ?`, [r.lastID]);
+  return get(`SELECT * FROM questions WHERE id = ?`, [r.lastID]);
 }
 
 app.post("/question", async (req, res) => {
@@ -164,27 +164,35 @@ app.get("/events/:eventId", (req, res) => {
   const { eventId } = req.params;
   console.log(`Event ID: ${eventId}`);
 
-  const sendAnswers = async () => {
+  const sendEvent = async () => {
     try {
-      const answers = await listQuestionsByEvent(eventId);
-      console.log(`Answers: ${answers}`);
-      res.write(JSON.stringify(answers));
+      const event = await getEvent(eventId);
+
+      if (!event) {
+        res.write(`data: ${JSON.stringify({ error: "Event not found" })}\n\n`);
+        return;
+      }
+
+      const questions = await listQuestionsByEvent(eventId);
+      const eventData = {
+        ...event,
+        questions: questions || [],
+      };
+      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
     } catch (error) {
-      console.error(error);
-      res.write(error);
+      console.error("SSE Error:", error);
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     }
   };
 
-  // Send an event every 3 seconds
-  const intervalId = setInterval(async () => {
-    await sendAnswers();
-  }, 3000);
+  sendEvent();
 
-  // Clean up when the client disconnects
+  const intervalId = setInterval(sendEvent, 3000);
+
   req.on("close", () => {
-    clearInterval(intervalId); // Stop sending events to this client
+    clearInterval(intervalId);
     console.log("Client disconnected. Stopped sending events.");
-    res.end(); // End the response
+    res.end();
   });
 });
 
