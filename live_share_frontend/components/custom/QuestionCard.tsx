@@ -14,14 +14,14 @@ export const QuestionCard = (props: any) => {
     }
   }
 
+  console.log(props);
+
   return (
     <Card className="flex flex-row w-full justify-between p-4">
       <div>
-        <Link href={`/question/${props.id}`}>
-          <h3 className="text-lg font-semibold">{props.text}</h3>
-        </Link>
+        <h3 className="text-lg font-semibold">{props.question}</h3>
         <p className="text-sm text-muted-foreground">
-          {props.createdAt.toDateString()}
+          {new Date(props.created_at).toDateString()}
         </p>
       </div>
       <div className="flex justify-end gap-2">
